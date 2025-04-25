@@ -5,126 +5,142 @@
  * @format
  */
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  ScrollView,
+  SafeAreaView,
   StatusBar,
   StyleSheet,
   Text,
-  useColorScheme,
   View,
+  Platform,
+  useColorScheme,
 } from 'react-native';
-
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
-
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
-
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+import messaging from '@react-native-firebase/messaging';
+import { CampaignClassic } from "@adobe/react-native-aepcampaignclassic";
 
 function App(): React.JSX.Element {
+  const [fcmToken, setFcmToken] = useState<string>('');
   const isDarkMode = useColorScheme() === 'dark';
 
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
+  useEffect(() => {
 
-  /*
-   * To keep the template simple and small we're adding padding to prevent view
-   * from rendering under the System UI.
-   * For bigger apps the reccomendation is to use `react-native-safe-area-context`:
-   * https://github.com/AppAndFlow/react-native-safe-area-context
-   *
-   * You can read more about it here:
-   * https://github.com/react-native-community/discussions-and-proposals/discussions/827
-   */
-  const safePadding = '5%';
+    const requestUserPermission = async () => {
+      if (Platform.OS === 'android') {
+        // On Android, permissions are granted by default
+        getFCMToken();
+      } else {
+        const authStatus = await messaging().requestPermission();
+        const enabled =
+          authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+          authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+
+        if (enabled) {
+          getFCMToken();
+        }
+      }
+    };
+
+    const getFCMToken = async () => {
+      try {
+        const token = await messaging().getToken();
+        console.log('FCM Token:', token);
+        setFcmToken(token);
+        CampaignClassic.registerDeviceWithToken(token, 'akhiljain.adobe.com');
+        console.log('Device registered with Adobe Campaign (token: ' + token + ')');
+      } catch (error) {
+        console.error('Failed to get FCM token:', error);
+      }
+    };
+
+    // Initialize Firebase Messaging
+    requestUserPermission();
+
+    // Listen for token refresh
+    const unsubscribe = messaging().onTokenRefresh(token => {
+      console.log('New FCM Token:', token);
+      setFcmToken(token);
+      CampaignClassic.registerDeviceWithToken(token, 'akhiljain.adobe.com');
+      console.log('Device registered with Adobe Campaign (token: ' + token + ')');
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   return (
-    <View style={backgroundStyle}>
+    <SafeAreaView style={[styles.container, isDarkMode && styles.darkContainer]}>
       <StatusBar
         barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
+        backgroundColor={isDarkMode ? '#000000' : '#FFFFFF'}
       />
-      <ScrollView
-        style={backgroundStyle}>
-        <View style={{paddingRight: safePadding}}>
-          <Header/>
+      <View style={styles.content}>
+        <Text style={[styles.title, isDarkMode && styles.darkText]}>Firebase Push Token</Text>
+        <View style={[styles.tokenContainer, isDarkMode && styles.darkTokenContainer]}>
+          <Text style={[styles.label, isDarkMode && styles.darkText]}>Device Token:</Text>
+          <Text style={[styles.token, isDarkMode && styles.darkToken]}>
+            {fcmToken || 'Waiting for token...'}
+          </Text>
         </View>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-            paddingHorizontal: safePadding,
-            paddingBottom: safePadding,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+  darkContainer: {
+    backgroundColor: '#000000',
   },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
+  content: {
+    flex: 1,
+    padding: 20,
+    justifyContent: 'center',
   },
-  highlight: {
-    fontWeight: '700',
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#333333',
+    textAlign: 'center',
+    marginBottom: 30,
+  },
+  tokenContainer: {
+    padding: 20,
+    backgroundColor: '#F8F8F8',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  darkTokenContainer: {
+    backgroundColor: '#1A1A1A',
+  },
+  label: {
+    fontSize: 16,
+    color: '#666666',
+    marginBottom: 10,
+    fontWeight: '500',
+  },
+  token: {
+    fontSize: 14,
+    color: '#333333',
+    padding: 15,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    overflow: 'scroll',
+  },
+  darkText: {
+    color: '#FFFFFF',
+  },
+  darkToken: {
+    backgroundColor: '#2A2A2A',
+    color: '#FFFFFF',
   },
 });
 
